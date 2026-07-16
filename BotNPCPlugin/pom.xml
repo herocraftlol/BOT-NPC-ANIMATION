@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.botnpc</groupId>
+    <artifactId>BotNPCPlugin</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <repositories>
+        <!-- Dépôt local rempli par BuildTools (voir README) -->
+        <repository>
+            <id>local-spigot</id>
+            <url>file://${project.basedir}/local-repo</url>
+        </repository>
+        <repository>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <!--
+            IMPORTANT :
+            Ce plugin a besoin des classes internes du serveur (NMS), donc on dépend
+            du jar Spigot "remappé" généré par BuildTools, PAS de paper-api seul.
+            Après avoir lancé BuildTools --rev 1.21.4, le jar est normalement déjà
+            installé dans ton ~/.m2 local sous ces coordonnées. Si jamais ce n'est
+            pas le cas, installe-le manuellement (commande dans le README).
+
+            ⚠️ Remplace "1.21.4" ci-dessous par la version EXACTE de ton serveur
+            (1.21, 1.21.1, 1.21.4, 1.21.8...) — regarde avec /version en jeu.
+        -->
+        <dependency>
+            <groupId>org.spigotmc</groupId>
+            <artifactId>spigot</artifactId>
+            <version>1.21.4-R0.1-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>BotNPCPlugin</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,18 @@
+name: BotNPCPlugin
+version: 1.0.0
+main: com.botnpc.plugin.BotNPCPlugin
+api-version: '1.21'
+author: TonPseudo
+description: Faux joueurs animés (marche, assis, duel) avec skins personnalisables.
+
+commands:
+  bot:
+    description: Gère les bots NPC
+    usage: /bot <create|remove|list|skin|path|sit|duel|stop|tp> ...
+    permission: botnpc.admin
+    permission-message: "§cTu n'as pas la permission d'utiliser cette commande."
+
+permissions:
+  botnpc.admin:
+    description: Autorise la gestion complète des bots NPC
+    default: op

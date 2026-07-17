@@ -1,6 +1,6 @@
 # BotNPCPlugin
 
-**BotNPCPlugin** is an autonomous Paper/Spigot plugin (no external dependencies like Citizens or ProtocolLib required) that creates animated fake players for your Minecraft server.
+**BotNPCPlugin** is an autonomous Spigot/Paper plugin (no external dependencies like Citizens or ProtocolLib required) that creates animated fake players for your Minecraft server. This version is compatible with **Spigot 1.21.1**.
 
 ## Features
 
@@ -8,6 +8,7 @@
 - **Sitting Position**: Bots sit on the block beneath them, head tilted toward the sky
 - **Sword Duel**: Choreographed sword duels between two bots (approach, strikes, reactions)
 - **Customizable Skins**: Use any existing Minecraft player's skin (fetched via Mojang API) or any PNG image URL (skin generated via the free [mineskin.org](https://mineskin.org) API)
+- **Compatible with Spigot 1.21.1**: Uses Spigot's NMS classes for full compatibility
 
 ---
 

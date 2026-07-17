@@ -10,39 +10,36 @@
     <packaging>jar</packaging>
 
     <properties>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
     <repositories>
-        <!-- Dépôt local rempli par BuildTools (voir README) -->
+        <!-- Local Spigot server jar built by BuildTools -->
         <repository>
             <id>local-spigot</id>
             <url>file://${project.basedir}/local-repo</url>
-        </repository>
-        <repository>
-            <id>papermc</id>
-            <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
     </repositories>
 
     <dependencies>
         <!--
-            IMPORTANT :
-            Ce plugin a besoin des classes internes du serveur (NMS), donc on dépend
-            du jar Spigot "remappé" généré par BuildTools, PAS de paper-api seul.
-            Après avoir lancé BuildTools --rev 1.21.4, le jar est normalement déjà
-            installé dans ton ~/.m2 local sous ces coordonnées. Si jamais ce n'est
-            pas le cas, installe-le manuellement (commande dans le README).
-
-            ⚠️ Remplace "1.21.4" ci-dessous par la version EXACTE de ton serveur
-            (1.21, 1.21.1, 1.21.4, 1.21.8...) — regarde avec /version en jeu.
+            IMPORTANT: This plugin needs the server internals (NMS).
+            We use Spigot 1.21.1 server jar for NMS classes.
+            The code has been adapted for Spigot mappings.
         -->
         <dependency>
             <groupId>org.spigotmc</groupId>
+            <artifactId>spigot-api</artifactId>
+            <version>1.21.1-R0.1-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- NMS classes from Spigot server jar -->
+        <dependency>
+            <groupId>org.spigotmc</groupId>
             <artifactId>spigot</artifactId>
-            <version>1.21.4-R0.1-SNAPSHOT</version>
+            <version>1.21.1-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

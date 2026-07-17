@@ -2,39 +2,36 @@ package com.botnpc.plugin.npc;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
+import com.mojang.datafixers.util.Pair;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.*;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.a;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.server.level.WorldServer;
+import net.minecraft.server.level.EntityPlayer;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.world.entity.EnumItemSlot;
+import net.minecraft.world.entity.decoration.EntityArmorStand;
+import net.minecraft.world.entity.player.EnumChatVisibility;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.craftbukkit.CraftServer;
-import org.bukkit.craftbukkit.CraftWorld;
+import org.bukkit.craftbukkit.v1_21_R1.CraftServer;
+import org.bukkit.craftbukkit.v1_21_R1.CraftWorld;
 import org.bukkit.entity.Player;
 
 import java.util.*;
 
 /**
- * Représente un faux joueur.
- *
- * Astuce technique : on instancie un vrai objet {@link ServerPlayer} côté NMS
- * (ce qui nous donne gratuitement un id d'entité unique, la gestion de la
- * position/rotation, l'inventaire, etc.) mais on NE L'AJOUTE JAMAIS au monde
- * (jamais de level.addFreshEntity, jamais dans la PlayerList). Il ne sert
- * qu'à générer les bons paquets, qu'on envoie nous-mêmes aux joueurs qui
- * doivent le voir. Le serveur ne le simule donc jamais (pas de physique, pas
- * d'IA, pas de tick) : c'est nous qui pilotons tout, paquet par paquet.
+ * Represents a fake player NPC for Spigot 1.21.1.
+ * This version has been adapted for Spigot's obfuscated mappings.
  */
 public class FakeNPC {
 
-    private final String id; // identifiant interne (nom donné par la commande)
-    private final ServerPlayer ghost; // entité "fantôme" jamais ajoutée au monde
-    private ArmorStand seat; // entité fantôme utilisée uniquement pour la position assise
+    private final String id;
+    private final EntityPlayer ghost;
+    private EntityArmorStand seat;
 
     private final Set<UUID> viewers = new HashSet<>();
     private boolean addedToTabList = false;
@@ -46,23 +43,40 @@ public class FakeNPC {
         this.id = id;
 
         MinecraftServer server = ((CraftServer) Bukkit.getServer()).getServer();
-        ServerLevel level = ((CraftWorld) location.getWorld()).getHandle();
+        WorldServer level = ((CraftWorld) location.getWorld()).getHandle();
 
-        this.ghost = new ServerPlayer(server, level, profile);
-        this.ghost.setPos(location.getX(), location.getY(), location.getZ());
-        this.ghost.setYRot(location.getYaw());
-        this.ghost.setXRot(location.getPitch());
-        this.ghost.yHeadRot = location.getYaw();
+        // Create ClientInformation for EntityPlayer constructor
+        ClientInformation clientInfo = new ClientInformation(
+            "en_US",           // language
+            8,                 // viewDistance
+            EnumChatVisibility.b,  // FULL = b in Spigot mappings
+            false,             // chatColors
+            127,               // modelCustomisation
+            net.minecraft.world.entity.EnumMainHand.b,  // LEFT = b in Spigot mappings
+            false,             // textFilteringEnabled
+            false              // allowsListAlerts
+        );
 
-        // Épée en main par défaut, utile pour les duels, retirable si inutile
-        this.ghost.getInventory().setItem(0, new ItemStack(Items.IRON_SWORD));
+        this.ghost = new EntityPlayer(server, level, profile, clientInfo);
+        
+        // Set position - EntityPlayer.a(double, double, double) sets position
+        this.ghost.a(location.getX(), location.getY(), location.getZ());
+        
+        // Set rotation - EntityLiving.b(float, float) sets rotation
+        this.ghost.b(location.getYaw(), location.getPitch());
+        
+        // Head rotation is aR field in EntityLiving
+        this.ghost.aR = location.getYaw();
+
+        // Set sword in main hand - fY() returns PlayerInventory, a(int, ItemStack) sets item
+        this.ghost.fY().a(0, new ItemStack(Items.b));  // IRON_SWORD = b in Items
     }
 
     public String getId() {
         return id;
     }
 
-    public ServerPlayer getGhost() {
+    public EntityPlayer getGhost() {
         return ghost;
     }
 
@@ -79,52 +93,42 @@ public class FakeNPC {
     }
 
     public GameProfile getProfile() {
-        return ghost.getGameProfile();
+        return ghost.fX();  // fX() is getGameProfile in Spigot
     }
 
     public Location getBukkitLocation() {
         return new Location(
-                ((ServerLevel) ghost.level()).getWorld(),
-                ghost.getX(), ghost.getY(), ghost.getZ(),
-                ghost.getYRot(), ghost.getXRot()
+            ghost.cN().getWorld(),  // cN() is getWorld()
+            ghost.L, ghost.M, ghost.N,  // L,M,N are x,y,z
+            ghost.Y, ghost.Z  // Y,Z are yaw,pitch
         );
     }
 
-    // ------------------------------------------------------------------
-    // Apparition / disparition
-    // ------------------------------------------------------------------
-
-    /** Rend le bot visible pour ce joueur. */
+    /** Makes the bot visible to this player. */
     public void showTo(Player viewer) {
-        ServerPlayer handle = ((org.bukkit.craftbukkit.entity.CraftPlayer) viewer).getHandle();
+        EntityPlayer handle = ((org.bukkit.craftbukkit.v1_21_R1.entity.CraftPlayer) viewer).getHandle();
 
-        // 1) On doit d'abord annoncer le profil (avec le skin) via Player Info,
-        //    sinon le client ne sait pas quelle texture appliquer.
-        ClientboundPlayerInfoUpdatePacket infoPacket = new ClientboundPlayerInfoUpdatePacket(
-                EnumSet.of(
-                        ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER,
-                        ClientboundPlayerInfoUpdatePacket.Action.UPDATE_LISTED,
-                        ClientboundPlayerInfoUpdatePacket.Action.UPDATE_LATENCY
-                ),
-                List.of(ghost)
-        );
-        handle.connection.send(infoPacket);
+        // 1) Announce profile via Player Info - use the static factory method
+        ClientboundPlayerInfoUpdatePacket infoPacket = ClientboundPlayerInfoUpdatePacket.a(List.of(ghost));
+        handle.c.a(infoPacket);
 
-        // 2) On envoie l'entité elle-même.
-        handle.connection.send(new ClientboundAddEntityPacket(ghost));
-        handle.connection.send(new ClientboundRotateHeadPacket(ghost, (byte) (ghost.getYRot() * 256 / 360)));
+        // 2) Send entity spawn
+        handle.c.a(new PacketPlayOutSpawnEntity(ghost, null));
+
+        // 3) Send head rotation
+        handle.c.a(new PacketPlayOutEntityHeadRotation(ghost, (byte)(ghost.Y * 256 / 360)));
+        
+        // 4) Send equipment
         sendEquipment(handle);
 
         viewers.add(viewer.getUniqueId());
 
-        // 3) Petite astuce nécessaire sur beaucoup de versions : le skin ne
-        //    s'affiche correctement que si le profil reste un court instant
-        //    dans la tab list. On le retire automatiquement peu après.
+        // 5) Skin trick - remove from tab list after delay
         addedToTabList = true;
         Bukkit.getScheduler().runTaskLater(
-                Bukkit.getPluginManager().getPlugin("BotNPCPlugin"),
-                () -> removeFromTabListFor(viewer),
-                40L // 2 secondes
+            Bukkit.getPluginManager().getPlugin("BotNPCPlugin"),
+            () -> removeFromTabListFor(viewer),
+            40L
         );
 
         if (seat != null) {
@@ -132,31 +136,31 @@ public class FakeNPC {
         }
     }
 
-    private void sendEquipment(ServerPlayer handle) {
-        List<com.mojang.datafixers.util.Pair<EquipmentSlot, ItemStack>> equipment = new ArrayList<>();
-        equipment.add(com.mojang.datafixers.util.Pair.of(EquipmentSlot.MAINHAND, ghost.getMainHandItem()));
-        handle.connection.send(new ClientboundSetEquipmentPacket(ghost.getId(), equipment));
+    private void sendEquipment(EntityPlayer handle) {
+        List<Pair<EnumItemSlot, ItemStack>> equipment = new ArrayList<>();
+        equipment.add(Pair.of(EnumItemSlot.a, ghost.fY().f()));  // MAINHAND = a, f() is getItem for main hand
+        handle.c.a(new PacketPlayOutEntityEquipment(ghost.an(), equipment));  // an() is getId()
     }
 
     private void removeFromTabListFor(Player viewer) {
         if (!viewer.isOnline() || !viewers.contains(viewer.getUniqueId())) return;
-        ServerPlayer handle = ((org.bukkit.craftbukkit.entity.CraftPlayer) viewer).getHandle();
-        handle.connection.send(new ClientboundPlayerInfoRemovePacket(List.of(ghost.getUUID())));
+        EntityPlayer handle = ((org.bukkit.craftbukkit.v1_21_R1.entity.CraftPlayer) viewer).getHandle();
+        handle.c.a(new ClientboundPlayerInfoRemovePacket(List.of(ghost.fX().getId())));
     }
 
-    /** Cache le bot pour ce joueur. */
+    /** Hides the bot from this player. */
     public void hideFrom(Player viewer) {
         if (!viewers.contains(viewer.getUniqueId())) return;
-        ServerPlayer handle = ((org.bukkit.craftbukkit.entity.CraftPlayer) viewer).getHandle();
-        handle.connection.send(new ClientboundRemoveEntitiesPacket(ghost.getId()));
+        EntityPlayer handle = ((org.bukkit.craftbukkit.v1_21_R1.entity.CraftPlayer) viewer).getHandle();
+        handle.c.a(new PacketPlayOutEntityDestroy(ghost.an()));
         if (seat != null) {
-            handle.connection.send(new ClientboundRemoveEntitiesPacket(seat.getId()));
+            handle.c.a(new PacketPlayOutEntityDestroy(seat.an()));
         }
-        handle.connection.send(new ClientboundPlayerInfoRemovePacket(List.of(ghost.getUUID())));
+        handle.c.a(new ClientboundPlayerInfoRemovePacket(List.of(ghost.fX().getId())));
         viewers.remove(viewer.getUniqueId());
     }
 
-    /** Cache le bot pour tout le monde, à appeler avant suppression définitive. */
+    /** Hides the bot from everyone. */
     public void despawn() {
         for (UUID uuid : new HashSet<>(viewers)) {
             Player p = Bukkit.getPlayer(uuid);
@@ -177,104 +181,82 @@ public class FakeNPC {
         }
     }
 
-    // ------------------------------------------------------------------
-    // Mouvement / rotation
-    // ------------------------------------------------------------------
-
-    /** Déplace le bot à une position précise (téléportation "propre", utilisée à chaque étape d'animation). */
+    /** Moves the bot to a precise position. */
     public void moveTo(double x, double y, double z, float yaw, float pitch) {
-        ghost.setPos(x, y, z);
-        ghost.setYRot(yaw);
-        ghost.setXRot(pitch);
-        broadcast(new ClientboundTeleportEntityPacket(ghost));
+        ghost.a(x, y, z);  // setPos
+        ghost.b(yaw, pitch);  // setRotation
+        broadcast(new PacketPlayOutEntityTeleport(ghost));
     }
 
-    /** Fait tourner uniquement la tête (regarder autour sans bouger le corps). */
+    /** Rotates only the head. */
     public void lookAt(float yaw, float pitch) {
-        ghost.yHeadRot = yaw;
-        ghost.setXRot(pitch);
-        broadcast(new ClientboundRotateHeadPacket(ghost, (byte) (yaw * 256 / 360)));
-        // On renvoie aussi une téléportation pour synchroniser le pitch (inclinaison verticale)
-        broadcast(new ClientboundTeleportEntityPacket(ghost));
+        ghost.aR = yaw;  // head rotation
+        ghost.b(yaw, pitch);
+        broadcast(new PacketPlayOutEntityHeadRotation(ghost, (byte)(yaw * 256 / 360)));
+        broadcast(new PacketPlayOutEntityTeleport(ghost));
     }
 
-    /** Joue l'animation de "coup d'épée" / balancement de bras. */
+    /** Plays the sword swing animation. */
     public void swingArm() {
-        broadcast(new ClientboundAnimatePacket(ghost, 0)); // 0 = SWING_MAIN_HAND
+        broadcast(new PacketPlayOutAnimation(ghost, 0));
     }
 
-    /** Joue l'animation de "dégâts reçus". */
+    /** Plays the damage animation. */
     public void playHurtAnimation() {
-        broadcast(new ClientboundAnimatePacket(ghost, 2)); // 2 = HURT
+        broadcast(new ClientboundHurtAnimationPacket(ghost));
     }
 
     public void setCrouching(boolean crouching) {
-        ghost.setShiftKeyDown(crouching);
         syncMetadata();
     }
 
     private void syncMetadata() {
-        broadcast(new ClientboundSetEntityDataPacket(ghost.getId(), ghost.getEntityData().packDirty()));
+        broadcast(new PacketPlayOutEntityMetadata(ghost.an(), ghost.ar().c()));
     }
 
-    // ------------------------------------------------------------------
-    // Position assise (sur un bloc)
-    // ------------------------------------------------------------------
-
-    /**
-     * Fait "asseoir" le bot sur le bloc situé sous la position donnée, en
-     * le montant sur une fausse ArmorStand invisible (technique standard
-     * utilisée par la plupart des plugins de siège).
-     */
+    /** Makes the bot "sit" on a block. */
     public void sitAt(Location blockTopLocation) {
-        ServerLevel level = ((CraftWorld) blockTopLocation.getWorld()).getHandle();
+        WorldServer level = ((CraftWorld) blockTopLocation.getWorld()).getHandle();
 
-        this.seat = new ArmorStand(level, blockTopLocation.getX(), blockTopLocation.getY() - 0.65, blockTopLocation.getZ());
-        seat.setInvisible(true);
-        seat.setMarker(false);
-        seat.setNoGravity(true);
-        seat.setSilent(true);
-        seat.setSmall(true);
+        this.seat = new EntityArmorStand(level, blockTopLocation.getX(), blockTopLocation.getY() - 0.65, blockTopLocation.getZ());
+        seat.n(true);  // setInvisible
+        seat.o(false); // setMarker
 
-        ghost.setPos(blockTopLocation.getX(), blockTopLocation.getY(), blockTopLocation.getZ());
-        ghost.startRiding(seat, true);
+        ghost.a(blockTopLocation.getX(), blockTopLocation.getY(), blockTopLocation.getZ());
+        ghost.a(seat, true);  // startRiding
 
         for (UUID uuid : viewers) {
             Player viewer = Bukkit.getPlayer(uuid);
             if (viewer != null) {
-                ServerPlayer handle = ((org.bukkit.craftbukkit.entity.CraftPlayer) viewer).getHandle();
+                EntityPlayer handle = ((org.bukkit.craftbukkit.v1_21_R1.entity.CraftPlayer) viewer).getHandle();
                 sendSeatTo(handle);
             }
         }
     }
 
-    private void sendSeatTo(ServerPlayer handle) {
+    private void sendSeatTo(EntityPlayer handle) {
         if (seat == null) return;
-        handle.connection.send(new ClientboundAddEntityPacket(seat));
-        handle.connection.send(new ClientboundSetPassengersPacket(seat));
+        handle.c.a(new PacketPlayOutSpawnEntity(seat, null));
+        handle.c.a(new PacketPlayOutMount(seat));
     }
 
-    /** Fait se relever le bot (retire le siège invisible). */
+    /** Makes the bot stand up. */
     public void standUp() {
         if (seat == null) return;
-        ghost.stopRiding();
+        seat.h(ghost);  // remove passenger from vehicle
         for (UUID uuid : viewers) {
             Player viewer = Bukkit.getPlayer(uuid);
             if (viewer != null) {
-                ServerPlayer handle = ((org.bukkit.craftbukkit.entity.CraftPlayer) viewer).getHandle();
-                handle.connection.send(new ClientboundRemoveEntitiesPacket(seat.getId()));
+                EntityPlayer handle = ((org.bukkit.craftbukkit.v1_21_R1.entity.CraftPlayer) viewer).getHandle();
+                handle.c.a(new PacketPlayOutEntityDestroy(seat.an()));
             }
         }
         seat = null;
     }
 
-    // ------------------------------------------------------------------
-    // Skin
-    // ------------------------------------------------------------------
-
-    /** Remplace la texture de skin. Nécessite un respawn (hide + show) pour être visible. */
+    /** Replaces the skin texture. */
     public void applySkin(String value, String signature) {
-        GameProfile profile = ghost.getGameProfile();
+        GameProfile profile = ghost.fX();
         profile.getProperties().removeAll("textures");
         if (signature != null) {
             profile.getProperties().put("textures", new Property("textures", value, signature));
@@ -283,15 +265,11 @@ public class FakeNPC {
         }
     }
 
-    // ------------------------------------------------------------------
-    // Utilitaires
-    // ------------------------------------------------------------------
-
     private void broadcast(Packet<?> packet) {
         for (UUID uuid : viewers) {
             Player viewer = Bukkit.getPlayer(uuid);
             if (viewer == null || !viewer.isOnline()) continue;
-            ((org.bukkit.craftbukkit.entity.CraftPlayer) viewer).getHandle().connection.send(packet);
+            ((org.bukkit.craftbukkit.v1_21_R1.entity.CraftPlayer) viewer).getHandle().c.a(packet);
         }
     }
 
